@@ -42,8 +42,8 @@ def sendtextalert(content):
     # change the "from_" number to your Twilio number and the "to" number
     # to the phone number you signed up for Twilio with, or upgrade your
     # account to send SMS to any phone number
-    #client.messages.create(to="+14038616717", 
-    #                       from_="+12025191944", 
+    #client.messages.create(to="+999999999", 
+    #                       from_="+999999999", 
     #                       body=content)
     #client is None
     print (content)
