@@ -4,6 +4,7 @@ import logging
 import queue
 import threading
 import time
+import sys
 
 # Imports for processing XML alerts into geoJSON
 import xml.etree.cElementTree as et
