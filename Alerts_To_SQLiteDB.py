@@ -36,9 +36,10 @@ def getvalueofnode(node):
 def sendtextalert(content):
     """ Send text alert """
     # the following line needs your Twilio Account SID and Auth Token
-    # Your Account Sid and Auth Token from twilio.com/console
-    # DANGER! This is insecure. See http://twil.io/secure
-    #client = Client("", "")
+    # Your Account Sid and Auth Token from twilio.com/user/account
+    #$sid = getenv('TWILIO_ACCOUNT_SID');
+    #$token = getenv('TWILIO_AUTH_TOKEN');
+    #$client = new Client($sid, $token);
 
     # change the "from_" number to your Twilio number and the "to" number
     # to the phone number you signed up for Twilio with, or upgrade your
