@@ -53,9 +53,6 @@ def sendtextalert(content):
 def listener(queue, event, host, port):
 
     """Listen to socket for emergency alert data"""
-    # Canada emergency alert system 
-    #host = "streaming1.naad-adna.pelmorex.com"
-    #port = 8080
     client_socket = socket.socket()
 
     try:
