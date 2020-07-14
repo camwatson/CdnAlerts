@@ -324,6 +324,7 @@ def processalert(alertdata):
 
 def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
     try:
+
         # Create connection to SQLite DB
         conn = sqlite3.connect('cap_data.db')
         c = conn.cursor()
@@ -353,14 +354,16 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
                         conn.commit()
 
                 # Load polygon areas to table.
-                for ind in polys.index: 
-                    chkquery = " SELECT count(areaDesc) from cap_poly WHERE areaDesc = '" + polys['areaDesc'][ind] + "';"
+                for ind in polys.index:
+                    # Replace single quotes with 2 of them to ensure they are escaped for SQL call
+                    Area_Desc = polys['areaDesc'][ind].replace("'","''")
+                    chkquery = " SELECT count(areaDesc) from cap_poly WHERE areaDesc = '" + Area_Desc + "';"
                     countpoly = c.execute(chkquery)
                     for polyrow in countpoly:
                         # If the count returns zero then we haven't ever loaded this area polygon
                         if polyrow[0] == 0:
-                            inquery = "INSERT INTO cap_poly (areaDesc, polygon) VALUES('" + polys['areaDesc'][ind] + "', '" + polys['polygon'][ind] + "');"
-                            logging.info("New Poly: %s", polys['areaDesc'][ind])
+                            inquery = "INSERT INTO cap_poly (areaDesc, polygon) VALUES('" + Area_Desc + "', '" + polys['polygon'][ind] + "');"
+                            logging.info("New Poly: %s", Area_Desc)
                             c.execute(inquery)
                             conn.commit()
                     #print(polys['areaDesc'][ind], polys['polygon'][ind]) 
@@ -384,8 +387,8 @@ if __name__ == "__main__":
     try: 
         # Configure logging details
         format = "%(asctime)s.%(msecs)04d: %(message)s"
-        #logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
-        logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
+        logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
+        #logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
         #logging.getLogger().setLevel(logging.DEBUG)
 
         # Setup taken from here: https://realpython.com/intro-to-python-threading/
