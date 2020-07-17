@@ -37,9 +37,11 @@ def sendtextalert(content):
     """ Send text alert """
     # the following line needs your Twilio Account SID and Auth Token
     # Your Account Sid and Auth Token from twilio.com/user/account
-    #$sid = getenv('TWILIO_ACCOUNT_SID');
-    #$token = getenv('TWILIO_AUTH_TOKEN');
-    #$client = new Client($sid, $token);
+    #account_sid = os.environ['TWILIO_ACCOUNT_SID']
+    #auth_token = os.environ['TWILIO_AUTH_TOKEN']
+    #to_num = os.environ['TWILIO_TO_NUM']
+    #from_num = os.environ['TWILIO_FROM_NUM']
+    #client = Client(account_sid, auth_token)
 
     # change the "from_" number to your Twilio number and the "to" number
     # to the phone number you signed up for Twilio with, or upgrade your
