@@ -6,6 +6,9 @@ import threading
 import time
 import sys
 
+# Required to fetch env variables for tokens
+import os
+
 # Imports for processing XML alerts into geoJSON
 import xml.etree.cElementTree as et
 import pandas as pd
@@ -20,8 +23,8 @@ import re
 # Import socket module
 import socket     
 
-# Only used for SMS messages
-# from twilio.rest import Client
+# Only used for SMS message
+from twilio.rest import Client
 
 # Background on CAP alerts from Google - https://developers.google.com/public-alerts/reference/cap-google
 # Alerts Archive Found Here: https://alertsarchive.pelmorex.com/en.php
@@ -33,24 +36,48 @@ def getvalueofnode(node):
     """ return node text or None """
     return node.text if node is not None else None
 
-def sendtextalert(content):
+def sendtextalert(MasterID):
     """ Send text alert """
-    # the following line needs your Twilio Account SID and Auth Token
-    # Your Account Sid and Auth Token from twilio.com/user/account
-    #account_sid = os.environ['TWILIO_ACCOUNT_SID']
-    #auth_token = os.environ['TWILIO_AUTH_TOKEN']
-    #to_num = os.environ['TWILIO_TO_NUM']
-    #from_num = os.environ['TWILIO_FROM_NUM']
-    #client = Client(account_sid, auth_token)
+    try:
+        print ("SEND ALERT!")
+        conn = sqlite3.connect('cap_data.db')
+        c = conn.cursor()
 
-    # change the "from_" number to your Twilio number and the "to" number
-    # to the phone number you signed up for Twilio with, or upgrade your
-    # account to send SMS to any phone number
-    #client.messages.create(to="+999999999", 
-    #                       from_="+999999999", 
-    #                       body=content)
-    #client is None
-    print (content)
+        # the following line needs your Twilio Account SID and Auth Token
+        # Your Account Sid and Auth Token from twilio.com/user/account
+        account_sid = os.environ['TWILIO_ACCOUNT_SID']
+        auth_token = os.environ['TWILIO_AUTH_TOKEN']
+        to_num = os.environ['TWILIO_TO_NUM']
+        from_num = os.environ['TWILIO_FROM_NUM']
+        client = Client(account_sid, auth_token)
+
+
+        textalertquery = "select cap_info.headline, cap_info.responseType, cap_alerts.msgType, cap_info.expires,cap_info.event,cap_info.category,cap_info.certainty,cap_info.severity,cap_poly.areaDesc,cap_info.description from cap_alerts, cap_info, cap_area, cap_poly where cap_alerts.refID = cap_info.refID and cap_info.refid = cap_area.refID and cap_info.infoid = cap_area.infoID and cap_area.areaDesc = cap_poly.areaDesc and cap_alerts.status = 'Actual' and cap_alerts.refid = '" + MasterID + "';"
+        textalertresults = c.execute(textalertquery)
+        for alertrow in textalertresults:
+            headline = alertrow[0]
+            resptype = alertrow[1]
+            msgType = alertrow[2]
+            areaname = alertrow[8]
+            discp = alertrow[9]
+            content = areaname + " : " + headline + "\nResp Type: " + resptype + "\nType: " + msgType + "\nDescription:\n" + discp
+            # change the "from_" number to your Twilio number and the "to" number
+            # to the phone number you signed up for Twilio with, or upgrade your
+            # account to send SMS to any phone number
+            message = client.messages \
+                            .create(
+                                body=content,
+                                from_=from_num,
+                                to=to_num
+                            )
+
+            print(message.sid)
+
+        conn is None
+        c is None   
+        client is None
+    except Exception as e: # work on python 3.x
+        logging.info("SendTextAlert ERROR: %s", e)
 
 def listener(queue, event, host, port):
 
@@ -60,8 +87,9 @@ def listener(queue, event, host, port):
     try:
         client_socket.connect((host, port))
     except:
-        print("Connection Error.  Can't connect to: %s", host)
-        sys.exit()
+        print("Connection Error.  Can't connect to: ", host)
+        logging.error("ERROR: Can't connect to: %s", host)
+        EventSetEmptyQueue (queue, event)
 
     logging.info("Connected.  Awaiting data from: %s", host)
     alldata = ""
@@ -114,7 +142,9 @@ def listener(queue, event, host, port):
                 client_socket.connect((host, port))
             except:
                 print("Re-Connection Error.  Can't connect to: %s", host)
-                sys.exit()
+                logging.error("Re-Connection Error.  Can't connect to: %s", host)
+                EventSetEmptyQueue()
+
             logging.info("Connection restored.  Awaiting data from: %s", host)
         
         except ConnectionResetError as e:
@@ -126,7 +156,9 @@ def listener(queue, event, host, port):
                 client_socket.connect((host, port))
             except:
                 print("Re-Connection Error.  Can't connect to: %s", host)
-                sys.exit()
+                logging.error("Re-Connection Error.  Can't connect to: %s", host)
+                EventSetEmptyQueue()
+
             logging.info("Connection restored.  Awaiting data from: %s", host)         
         
         except Exception as e: # work on python 3.x
@@ -134,10 +166,7 @@ def listener(queue, event, host, port):
             
 
     logging.info("Listener received event. Exiting")
-    event.set()
-    while not pipeline.empty():
-        # Waiting for queue to empty.
-        i = 0 
+    EventSetEmptyQueue (queue, event)
     logging.info("Queue empty.  Shutdown.")
   
 def consumer(queue, event):
@@ -170,6 +199,8 @@ def consumer(queue, event):
     logging.info("Consumer empty.  Shutdown.")
 
 def processhb(hbdata):
+    ''' By service definition a message (heartbeat) should be received every minute and it containts the last 10 alerts.  Check to see if we've missed something '''
+
     try:
         # Define XML rool DIRECTLY FROM A STRING
         root = et.fromstring(hbdata)
@@ -217,7 +248,7 @@ def processhb(hbdata):
         logging.warning("Heartbeat processing FAILED.")
 
 def processalert(alertdata):
-    """ Process XML alert data and load into SQLite DB """
+    """ Process XML alert data """
     try: 
         #parsed_xml = et.parse("canada_alerts.txt")
         #root = parsed_xml.getroot()
@@ -266,7 +297,6 @@ def processalert(alertdata):
 
         # Setup a counter for the 'info' items 
         info_count = 0
-        sendalert = 0
 
         # Loop through all the 'info' blocks that have a language degine as en-CA... 
         # we append into the data frames within this loop
@@ -294,9 +324,6 @@ def processalert(alertdata):
             for area in info_en.findall("d:area", ns):
                 areaDesc = getvalueofnode(area.find('d:areaDesc', ns))
                 logging.debug("Area Impacted: %s", areaDesc)
-                # Check for certain areas and whether to send alert - Testing
-                if re.search(r'Calgary', areaDesc, re.S|re.I):
-                    sendalert = 1
                 polygon = getvalueofnode(area.find('d:polygon', ns))
                 #print (category, areaDesc, polygon)
                 polyWKT = re.sub(r'(-*\d) (-*\d)', r'\1, \2', polygon)
@@ -308,25 +335,19 @@ def processalert(alertdata):
                 dfar = dfar.append(pd.Series([refID, info_count, areaDesc], index=dfarcols), ignore_index=True)
                 dfp = dfp.append(pd.Series([areaDesc, polyWKT], index=dfpcols), ignore_index=True)
 
-
             # Increment the count
             info_count = info_count + 1
         
         # Load data in to SQLite database
-        loadalertdb(refID, refs, dfa, dfi, dfar, dfp)
-
-        if sendalert == 1:
-            print ("SEND ALERT!")
-            sendtextalert(headline)
-                  
+        loadalertdb(refID, refs, dfa, dfi, dfar, dfp)          
         logging.info("Alert processed")
 
     except Exception as e: # work on python 3.x
         logging.info("ProcessAlert ERROR: %s", e)
 
 def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
+    """ Process alert into the SQLlite database.  """
     try:
-
         # Create connection to SQLite DB
         conn = sqlite3.connect('cap_data.db')
         c = conn.cursor()
@@ -335,6 +356,9 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
         for row in results:
             # If the count returns zero then we haven't not yet logged this alert
             if row[0] == 0:
+                # Set flag for sending text alerts
+                sendalert = 0
+
                 logging.info("Loading details on %s into SQLite", MasterID)
                 #Load Alert items to table
                 alerts.to_sql('cap_alerts', conn, if_exists='append')
@@ -359,6 +383,9 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
                 for ind in polys.index:
                     # Replace single quotes with 2 of them to ensure they are escaped for SQL call
                     Area_Desc = polys['areaDesc'][ind].replace("'","''")
+                    # Check for certain areas and whether to send alert - Testing
+                    if re.search(r'Calgary', Area_Desc, re.S|re.I):
+                        sendalert = 1
                     chkquery = " SELECT count(areaDesc) from cap_poly WHERE areaDesc = '" + Area_Desc + "';"
                     countpoly = c.execute(chkquery)
                     for polyrow in countpoly:
@@ -371,17 +398,38 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
                     #print(polys['areaDesc'][ind], polys['polygon'][ind]) 
                 logging.info("Polygon data loaded to SQLite.")
                 logging.info("Alert data loaded to SQLite.")
+
             else:
+                # Likely a result of using 2 hosts... one thread will beat the other to the database.
                 logging.info("Alert %s already in database", MasterID)
 
         c = None
         conn is None
 
+        if sendalert == 1 and row[0] == 0:
+            sendtextalert(MasterID)
+
     except Exception as e:
         logging.info("LoadAlertDB ERROR: %s", e)
 
+def EventSetEmptyQueue (queue, event):
+    ''' Trigger event.set that will end our thread loop, but allow for queued items to complete '''
+    try:
+        logging.info("Please wait while the queue empties...")
+        event.set()
+        while not queue.empty():
+            # Waiting for queue to empty.
+            i = 0 
+    except Exception as e: # work on python 3.x
+        logging.warning("Listener ERROR: %s", e)
+        logging.error("EmptyQueue ERROR: Unable to gracefully shutdown operation.  Forcing shutdown: %s", e)
+        print('ERROR: Unable to gracefully shutdown operation.  Forcing shutdown.')
+        sys.exit()
+
 if __name__ == "__main__":
 
+    # We connect to both streaming hosts for redundancy.
+    # It's expected that all data received from one host will also be delivered from the second one
     primaryhost = "streaming1.naad-adna.pelmorex.com"
     secondaryhost = "streaming2.naad-adna.pelmorex.com"
     hostport = 8080
@@ -389,8 +437,8 @@ if __name__ == "__main__":
     try: 
         # Configure logging details
         format = "%(asctime)s.%(msecs)04d: %(message)s"
-        logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
-        #logging.basicConfig(format=format, level=logging.INFO,datefmt="%H:%M:%S")
+        #logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
+        logging.basicConfig(format=format, level=logging.INFO,datefmt="%Y-%m-%d %H:%M:%S")
         #logging.getLogger().setLevel(logging.DEBUG)
 
         # Setup taken from here: https://realpython.com/intro-to-python-threading/
@@ -404,22 +452,17 @@ if __name__ == "__main__":
             executor.submit(listener, pipeline, event, primaryhost, hostport)
             executor.submit(listener, pipeline, event, secondaryhost, hostport)
             executor.submit(consumer, pipeline, event)
+        
+        # Indicate the process has been shutdown via expected process.
+        logging.info("Script shut-down.")
+        print('Script shut-down.')
             
     except KeyboardInterrupt:
-        logging.info("Main: about to set event")
-        logging.info("Please wait while the queue empties...")
-        event.set()
-        while not pipeline.empty():
-            # Waiting for queue to empty.
-            i = 0 
+        EventSetEmptyQueue (pipeline, event)
+        logging.error("User cancelled the operation")
         print('You cancelled the operation.')
         
     except Exception as e: # work on python 3.x
-        print("ERROR: ")
-        print(e)
-        logging.info("Main: about to set event")
-        logging.info("Please wait while the queue empties...")
-        event.set()
-        while not pipeline.empty():
-            # Waiting for queue to empty.
-            i = 0 
+        EventSetEmptyQueue (pipeline, event)
+        logging.error("ERROR: Script shutdown")
+        print('ERROR:  Script shutdown')
