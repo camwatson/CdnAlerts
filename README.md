@@ -11,10 +11,20 @@ This script currently aggresively logs all sorts of information as it is very mu
 The database is provided with example data (cap_alerts.db) and is fairly simple:
 * cap_alert - Each alert sent contains a sender, reference ID and some other basic information.
 * cap_info - Each alert may contain multiple information blocks (this is exclusive to Envrionment Canada alerts)
-* cap_area - Each information block may refernce multiple areas
+* cap_area - Each information block may reference multiple areas
 * cap_poly - Each area is defined as a polygon and are unique and only stored once.
 
-I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push them pipeline (in a producer and the consumer setup)
+I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push them pipeline (in a producer and the consumer setup).  The basic structure of the application is as follows:
+* Using a ThreadPoolExecuter we generate 2 threads listening to redundant tcp/ip streams and 1 thread that is a consumer
+* As the listener receives data it decodes it utilizing utf-8, and then continues to compile data until it there is a complete xml alert (<alert>...</alert>)
+* Via a pipeline the listener adds the alert to a queue
+* The consumer thread picks up items as they added to the queue are identifes if it appears to be a real alert or a 'heartbeat'
+* If a heatbeat is identified the xml data contains the last 10 alerts.  We poll the database to see if those alerts have been loaded into the database.  If they haven't we query them from the Pelmorex archive feed and load them into the database
+* If an actual alert is idenfied we breakdown the information in the xml structure, check to see if the alert has been previously loaded into the database (with redudant tcp/ip streams every alert will be duplicated in the process, but we only store one)
+* If the alerts hasn't already been added to the database we load the appropriate data into the 3 tables
+* For the cap_poly table we check to see if the polygon has been loaded already.  If not we load the polygon data as WKT into the table
+* Once the data is loaded into the database we check to see if the newly added alert intersects areas of interest (maps.geojson - deliberatly excluded.  Other users will have to add their own file and it must contain an attribute called 'Name' - see http://geojson.io/ to create a file)
+* If the data intersects the areas of interest we send a text message with Twilio (users will need to create a Twilio account and create envrionment variables with token, id, to and from numbers) including alert details.
 
 1. Background on CAP alerts from Google - https://developers.google.com/public-alerts/reference/cap-google
 2. Alerts Archive Found Here: https://alertsarchive.pelmorex.com/en.php
