@@ -1,3 +1,4 @@
 .vscode/settings.json
 .vscode/launch.json
 cap_data.db
+map.geojson

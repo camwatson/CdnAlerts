@@ -14,6 +14,8 @@ import xml.etree.cElementTree as et
 import pandas as pd
 import numpy as np
 import sqlite3
+import geopandas
+from shapely import wkt
 
 # Fetch previous alerts via URL
 from urllib.request import Request, urlopen
@@ -39,9 +41,7 @@ def getvalueofnode(node):
 def sendtextalert(MasterID):
     """ Send text alert """
     try:
-        print ("SEND ALERT!")
         conn = sqlite3.connect('cap_data.db')
-        c = conn.cursor()
 
         # the following line needs your Twilio Account SID and Auth Token
         # Your Account Sid and Auth Token from twilio.com/user/account
@@ -51,33 +51,43 @@ def sendtextalert(MasterID):
         from_num = os.environ['TWILIO_FROM_NUM']
         client = Client(account_sid, auth_token)
 
+        textquery = "select cap_alerts.refID, cap_info.infoID, cap_info.headline, cap_info.responseType, cap_alerts.msgType, cap_info.expires,cap_info.event,cap_info.category,cap_info.certainty,cap_info.severity,cap_poly.areaDesc, cap_info.description, cap_poly.polygon from cap_alerts, cap_info, cap_area, cap_poly where cap_alerts.refID = cap_info.refID and cap_info.refid = cap_area.refID and cap_info.infoid = cap_area.infoID and cap_area.areaDesc = cap_poly.areaDesc and cap_alerts.status = 'Actual' and cap_alerts.refid = '" + MasterID + "';"
+        df1 = pd.read_sql_query(textquery,conn)
+        # Convert WKT data in polygon column to shapely format for gdf
+        df1['polygon'] = df1['polygon'].apply(wkt.loads)
+        # Create GeoDataFrame
+        gdf1 = geopandas.GeoDataFrame(df1, geometry='polygon')
+        # Set CRS of data
+        gdf1 = gdf1.set_crs(epsg=4326)
+        # Load geojson file with areas to intersect
+        fname = "map.geojson"
+        gdf2 = geopandas.read_file(fname)
+        # Intersect dataframe results
+        res_intersection = geopandas.overlay(gdf1, gdf2, how='intersection')
+        if res_intersection.empty is False:
+            # Dissolve data based on ID and info_count 
+            textdf = res_intersection.dissolve(by=['refID', 'infoID'], aggfunc='first')
+            for index, row in textdf.iterrows():
+                content = row['Name'] + ": " + row['headline'] + "\nResponse: " +  row['responseType']  + "\nType: " + row['msgType'] + "\nDescription: " + row['description']
+                # change the "from_" number to your Twilio number and the "to" number
+                # to the phone number you signed up for Twilio with, or upgrade your
+                # account to send SMS to any phone number
+                message = client.messages \
+                                .create(
+                                    body=content,
+                                    from_=from_num,
+                                    to=to_num
+                                )
+                print(message.sid)
+                logging.info(message.sid)
+        else:
+            logging.info("No text alert sent.")
 
-        textalertquery = "select cap_info.headline, cap_info.responseType, cap_alerts.msgType, cap_info.expires,cap_info.event,cap_info.category,cap_info.certainty,cap_info.severity,cap_poly.areaDesc,cap_info.description from cap_alerts, cap_info, cap_area, cap_poly where cap_alerts.refID = cap_info.refID and cap_info.refid = cap_area.refID and cap_info.infoid = cap_area.infoID and cap_area.areaDesc = cap_poly.areaDesc and cap_alerts.status = 'Actual' and cap_alerts.refid = '" + MasterID + "';"
-        textalertresults = c.execute(textalertquery)
-        for alertrow in textalertresults:
-            headline = alertrow[0]
-            resptype = alertrow[1]
-            msgType = alertrow[2]
-            areaname = alertrow[8]
-            discp = alertrow[9]
-            content = areaname + " : " + headline + "\nResp Type: " + resptype + "\nType: " + msgType + "\nDescription:\n" + discp
-            # change the "from_" number to your Twilio number and the "to" number
-            # to the phone number you signed up for Twilio with, or upgrade your
-            # account to send SMS to any phone number
-            message = client.messages \
-                            .create(
-                                body=content,
-                                from_=from_num,
-                                to=to_num
-                            )
-
-            print(message.sid)
-
-        conn is None
-        c is None   
+        conn is None  
         client is None
     except Exception as e: # work on python 3.x
-        logging.info("SendTextAlert ERROR: %s", e)
+        logging.error("SendTextAlert ERROR: %s", e)
+        print ("ERROR")
 
 def listener(queue, event, host, port):
 
@@ -356,9 +366,6 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
         for row in results:
             # If the count returns zero then we haven't not yet logged this alert
             if row[0] == 0:
-                # Set flag for sending text alerts
-                sendalert = 0
-
                 logging.info("Loading details on %s into SQLite", MasterID)
                 #Load Alert items to table
                 alerts.to_sql('cap_alerts', conn, if_exists='append')
@@ -384,8 +391,6 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
                     # Replace single quotes with 2 of them to ensure they are escaped for SQL call
                     Area_Desc = polys['areaDesc'][ind].replace("'","''")
                     # Check for certain areas and whether to send alert - Testing
-                    if re.search(r'Calgary', Area_Desc, re.S|re.I):
-                        sendalert = 1
                     chkquery = " SELECT count(areaDesc) from cap_poly WHERE areaDesc = '" + Area_Desc + "';"
                     countpoly = c.execute(chkquery)
                     for polyrow in countpoly:
@@ -399,6 +404,7 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
                 logging.info("Polygon data loaded to SQLite.")
                 logging.info("Alert data loaded to SQLite.")
 
+                sendtextalert(MasterID)
             else:
                 # Likely a result of using 2 hosts... one thread will beat the other to the database.
                 logging.info("Alert %s already in database", MasterID)
@@ -406,9 +412,8 @@ def loadalertdb(MasterID, refs, alerts, infos, areas, polys):
         c = None
         conn is None
 
-        if sendalert == 1 and row[0] == 0:
-            sendtextalert(MasterID)
-
+        #if row[0] == 0:
+        #    
     except Exception as e:
         logging.info("LoadAlertDB ERROR: %s", e)
 
@@ -437,8 +442,8 @@ if __name__ == "__main__":
     try: 
         # Configure logging details
         format = "%(asctime)s.%(msecs)04d: %(message)s"
-        #logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
-        logging.basicConfig(format=format, level=logging.INFO,datefmt="%Y-%m-%d %H:%M:%S")
+        logging.basicConfig(filename='C:\\apps\\temp\\alerts.log', format=format, level=logging.INFO,datefmt="%H:%M:%S")
+        #logging.basicConfig(format=format, level=logging.INFO,datefmt="%Y-%m-%d %H:%M:%S")
         #logging.getLogger().setLevel(logging.DEBUG)
 
         # Setup taken from here: https://realpython.com/intro-to-python-threading/
