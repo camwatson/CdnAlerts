@@ -18,7 +18,7 @@ I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push t
 * Using a ThreadPoolExecuter we generate 2 threads listening to redundant tcp/ip streams and 1 thread that is a consumer
 * As the listener receives data it decodes it utilizing utf-8, and then continues to compile data until it there is a complete xml alert (i.e. - \<alert> \</alert>)
 * Via a pipeline the listener adds the alert to a queue
-* The consumer thread picks up items as they added to the queue are identifes if it appears to be a real alert or a 'heartbeat'
+* The consumer thread picks up items as they added to the queue and identifes if it appears to be a real alert or a 'heartbeat' (which are produced every minute by the service to confirm your connection)
 * If a heatbeat is identified the xml data contains the last 10 alerts.  We poll the database to see if those alerts have been loaded into the database.  If they haven't we query them from the Pelmorex archive feed and load them into the database
 * If an actual alert is idenfied we breakdown the information in the xml structure, check to see if the alert has been previously loaded into the database (with redudant tcp/ip streams every alert will be duplicated in the process, but we only store one)
 * If the alerts hasn't already been added to the database we load the appropriate data into the 3 tables
