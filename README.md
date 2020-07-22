@@ -23,7 +23,7 @@ I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push t
 * If an actual alert is idenfied we breakdown the information in the xml structure, check to see if the alert has been previously loaded into the database (with redudant tcp/ip streams every alert will be duplicated in the process, but we only store one)
 * If the alerts hasn't already been added to the database we load the appropriate data into the 3 tables
 * For the cap_poly table we check to see if the polygon has been loaded already.  If not we load the polygon data as WKT into the table
-* Once the data is loaded into the database we check to see if the newly added alert intersects areas of interest (maps.geojson - deliberatly excluded.  Other users will have to add their own file and it must contain an attribute called 'Name' - see http://geojson.io/ to create a file)
+* Once the data is loaded into the database we check to see if the newly added alert intersects areas of interest (maps.geojson - deliberatly excluded.  Other users will have to add their own file and it must contain an attribute called 'Name' - see http://geojson.io/ to create a file. This [Gist](https://gist.github.com/camwatson/ec29775ff2fc3fc97a6ff3d43158fa0d) provides an example.
 * If the data intersects the areas of interest we send a text message with Twilio (users will need to create a Twilio account and create envrionment variables with token, id, to and from numbers) including alert details.
 
 1. Background on CAP alerts from Google - https://developers.google.com/public-alerts/reference/cap-google
