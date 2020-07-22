@@ -14,7 +14,7 @@ The database is provided with example data (cap_alerts.db) and is fairly simple:
 * cap_area - Each information block may reference multiple areas
 * cap_poly - Each area is defined as a polygon and are unique and only stored once.
 
-I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push them pipeline (in a producer and the consumer setup).  The basic structure of the application is as follows:
+I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push them via a pipeline (in a producer and the consumer setup).  The basic structure of the application is as follows:
 * Using a ThreadPoolExecuter we generate 2 threads listening to redundant tcp/ip streams and 1 thread that is a consumer
 * As the listener receives data it decodes it utilizing utf-8, and then continues to compile data until it there is a complete xml alert (<alert>...</alert>)
 * Via a pipeline the listener adds the alert to a queue
