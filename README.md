@@ -6,7 +6,7 @@ As part of Canada's emergency alert system Pelmorex’s NAAD System collects pub
 * Required libraries: pandas and sqlite3
 * Optional: geopandas, shapely and twilio (these libraries are used to spatially locate alerts and send a text message if it intersects a certain area)
 
-This script currently aggresively logs all sorts of information as is very much a work in progress.
+This script currently aggresively logs all sorts of information as it is very much a work in progress.  Be warned that the log file can easily exceed 1 Mb in size every 24 hours.
 
 The database is provided with example data (cap_alerts.db) and is fairly simple:
 * cap_alert - Each alert sent contains a sender, reference ID and some other basic information.
