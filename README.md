@@ -16,7 +16,7 @@ The database is provided with example data (cap_alerts.db) and is fairly simple:
 
 I've utilized ThreadPoolExecuter to listen to multiple tcp/ip streams and push them via a pipeline (in a producer and the consumer setup).  The basic structure of the application is as follows:
 * Using a ThreadPoolExecuter we generate 2 threads listening to redundant tcp/ip streams and 1 thread that is a consumer
-* As the listener receives data it decodes it utilizing utf-8, and then continues to compile data until it there is a complete xml alert (<alert>...</alert>)
+* As the listener receives data it decodes it utilizing utf-8, and then continues to compile data until it there is a complete xml alert (<alert> </alert>)
 * Via a pipeline the listener adds the alert to a queue
 * The consumer thread picks up items as they added to the queue are identifes if it appears to be a real alert or a 'heartbeat'
 * If a heatbeat is identified the xml data contains the last 10 alerts.  We poll the database to see if those alerts have been loaded into the database.  If they haven't we query them from the Pelmorex archive feed and load them into the database
