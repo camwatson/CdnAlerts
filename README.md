@@ -3,7 +3,7 @@
 As part of Canada's emergency alert system [Pelmorex’s NAAD System](https://alerts.pelmorex.com/) collects public safety messages from authorized government authorities and distributes those messages by satellite and through the internet to broadcasting undertakings such as radio and television stations, cable and satellite TV companies, etc. This broadcast is available publically.  This python code consumes the TCP/IP streams broadcast by Pelmorex and captures the data into a simple SQLLite database.
 
 ## Main Script: Alerts_To_SQLiteDB.py
-* 'None Standard' Required libraries: pandas and sqlite3
+* 'Non-Standard' Required libraries: pandas and sqlite3
 * Optional libraries: geopandas, shapely and twilio (these libraries are used to spatially locate alerts and send a text message if it intersects a certain area)
 
 This script currently aggresively logs all sorts of information as it is very much a work in progress.  Be warned that the log file can easily exceed 1 Mb in size every 24 hours.
